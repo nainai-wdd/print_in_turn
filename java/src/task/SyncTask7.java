@@ -3,9 +3,10 @@ package task;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.LockSupport;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class SyncTask4 implements Runnable {
+public class SyncTask7 implements Runnable {
     // 打印的最大值
     private final int max;
     // 所处任务的序号（执行序号）
@@ -14,31 +15,30 @@ public class SyncTask4 implements Runnable {
     private final int maxPos;
     // 当前待执行任务的序号，共享内存来传递信息
     private final AtomicInteger curPos;
-    // 代替synchronized的轻量级锁，提供多个监控器，监控器可以和线程n:m绑定
-    private final ReentrantLock lock;
-    // 多个监控器，根据索引和任务1：1绑定
-    private final Condition[] conditions;
+    // 任务对应的线程，利用LockSupport手动控制线程的状态
+    private volatile Thread[] threads;
     // 倒计时器，用于主线程接收任务结束信号
     private final CountDownLatch latchForEnd;
 
-    public SyncTask4(int pos, int max, AtomicInteger curPos, CountDownLatch latch, ReentrantLock lock, Condition[] conditions, int maxPos) {
+    public SyncTask7(int pos, int max, AtomicInteger curPos, CountDownLatch latch, int maxPos) {
         this.pos = pos;
         this.max = max;
         this.curPos = curPos;
-        this.lock = lock;
-        this.conditions = conditions;
         this.latchForEnd = latch;
         this.maxPos = maxPos;
     }
 
+    public void setThreads(Thread[] threads) {
+        this.threads = threads;
+    }
+
     /**
      * 将整个循环放到同步代码块里，循环判断.
-     * 如果是自己的位置，则打印，并且通过object.wait-notify机制，唤醒下一个待办任务对应的线程，当前线程释放锁进入等待
-     * 如果不是自己的位置，则释放锁等待
+     * 如果是自己的位置，则打印，并且通过LockSupport.unpark唤醒下一个待办任务对应的线程，随后LockSupport.park()释放线程执行权
+     * 如果不是自己的位置，则LockSupport.park()释放线程执行权
      */
     @Override
     public void run() {
-        lock.lock();
         try {
             int i = pos;
             final int nextPost = (pos + 1) % maxPos;
@@ -48,31 +48,30 @@ public class SyncTask4 implements Runnable {
                     System.out.println(i);
                     i += maxPos;
                     curPos.set(nextPost);
-                    conditions[nextPost].signal();
+                    LockSupport.unpark(threads[nextPost]);
                 } else {
-                    conditions[pos].await();
+                    LockSupport.park();
                 }
             }
-        } catch (InterruptedException e) {
-            e.printStackTrace();
         } finally {
-            lock.unlock();
+            latchForEnd.countDown();
         }
-        latchForEnd.countDown();
     }
 
-    public static Runnable[] getTaskList(int max, int maxPos, CountDownLatch endLatch) {
-        final ReentrantLock reentrantLock = new ReentrantLock();
+    public static Thread[] getTaskList(int max, int maxPos, CountDownLatch endLatch) {
         final AtomicInteger curPos = new AtomicInteger(0);
-        final Condition[] conditions = new Condition[maxPos];
+        final SyncTask7[] runnables = new SyncTask7[maxPos];
         for (int i = 0; i < maxPos; i++) {
-            conditions[i] = reentrantLock.newCondition();
+            runnables[i] = new SyncTask7(i, max, curPos, endLatch, maxPos);
         }
-        Runnable[] runnables = new Runnable[maxPos];
+        final Thread[] threads = new Thread[maxPos];
         for (int i = 0; i < maxPos; i++) {
-            runnables[i] = new SyncTask4(i, max, curPos, endLatch, reentrantLock, conditions, maxPos);
+            threads[i] = new Thread(runnables[i]);
         }
-        return runnables;
+        for (int i = 0; i < maxPos; i++) {
+            runnables[i].setThreads(threads);
+        }
+        return threads;
     }
 
 }

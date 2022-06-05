@@ -46,10 +46,9 @@ public class SyncTask5 implements Runnable {
                 queueList[nextPost].add(1);
             }
         } catch (InterruptedException interruptedException) {
-            interruptedException.printStackTrace();
-        } finally {
-            latchForEnd.countDown();
+            throw new RuntimeException(interruptedException);
         }
+        latchForEnd.countDown();
     }
 
     public static Runnable[] getTaskList(int max, int maxPos, CountDownLatch endLatch) {

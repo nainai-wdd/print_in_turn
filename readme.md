@@ -30,9 +30,14 @@ ___
 + 方案六：Task6
   + 原理同方案五，
   + 改进点：用semaphore代替blockQueue，优化阻塞语意的实现
++ 方案七：Task7
+  + 原理同方案4
+  + 不同点：
+    1. 利用LockSupport.park();LockSupport.unpark(thread)实现执行权转移
+    2. 放弃锁机制，利用AtomicInteger对象底层使用了volatile，从而保证内存可见和防止指令重排
   
 ### 结果：
-  性能：方案六 > 方案四 > 方案五 > 方案二 > 方案三 > 方案一
+  性能：方案六 > 方案七 >(略大于) 方案四 >(略大于) 方案五（时间不稳定） > 方案二 > 方案三 > 方案一
 
 ### 思考：
   1. java线程是系统线程的1:1包装，多线程代码的执行顺序，遵循java自己的happens-before原则
@@ -72,13 +77,10 @@ ___
 ```python
 import asyncio
 import time
-
 # 模拟同步io库的操作
 def sync_io():
     time.sleep(5)
 
-    
-    
 # 模拟支持协程(支持异步)的io库的
 async def async_io():
       await asyncio.sleep(5)

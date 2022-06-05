@@ -3,7 +3,9 @@ import task.*;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -14,32 +16,36 @@ public class Main {
 
     public static void main(String[] args) {
         String[] taskTypes = new String[]{
-                "SyncTask1",
-                "SyncTask2",
-                "SyncTask3",
+//                "SyncTask1",
+//                "SyncTask2",
+//                "SyncTask3",
                 "SyncTask4",
                 "SyncTask5",
                 "SyncTask6",
+                "SyncTask7",
         };
         // 打印总数
         int max = 10000;
         // 协作线程数量
-        int maxPos = 3;
+        int maxPos = 10;
         // 取平均值时的窗口大小
-        int times = 5;
-        // 多次执行，结果取平均值
-        final List<String> resultList = Arrays.stream(taskTypes)
-                .map(taskType -> {
-                    final double avg = IntStream.range(0, times)
-                            .mapToLong(i -> test_async_once(taskType, max, maxPos)).average().orElse(0L);
-                    return taskType + " spend: " + avg + "ms";
-                })
-                .collect(Collectors.toList());
+        int times = 3;
         // 单线程执行
         final long testSyncMillis = testSync(max);
+        // 多次执行，结果取平均值
+        final Map<String, Long> reduce = IntStream.range(0, times).mapToObj(i ->
+                        // 计算一次所有类型的任务，获取单次执行耗时
+                        Arrays.stream(taskTypes).collect(Collectors.toMap(taskType -> taskType,
+                                taskType -> test_async_once(taskType, max, maxPos)))
+                // 多次计算，获取总耗时
+        ).reduce(new HashMap<String, Long>(16), (map, next) -> {
+            next.forEach((k, v) -> map.put(k, map.getOrDefault(k, 0L) + v));
+            return map;
+        });
+        System.out.println("===================async====================");
+        // 打印，获取平均耗时
+        reduce.forEach((k, v) -> System.out.println(k + "spend: " + v / times + "ms"));
         // 打印结果
-        System.out.println("=================aync====================");
-        resultList.forEach(System.out::println);
         System.out.println("===================sync====================");
         System.out.println("sync spend: " + testSyncMillis + "ms");
     }
@@ -47,22 +53,26 @@ public class Main {
     private static long test_async_once(String taskType, int max, int maxPos) {
         System.out.println("=================start:" + taskType + "====================");
         final CountDownLatch latch = new CountDownLatch(maxPos);
-        final Runnable[] tasks = getTaskList(taskType, max, latch, maxPos);
-        final ExecutorService threadPool = Executors.newFixedThreadPool(maxPos);
+        Runnable[] tasks = getTaskList(taskType, max, latch, maxPos);
+        Thread[] threads = null;
+        threads = Util.createThreadsByRunnables(tasks);
+//        final ExecutorService threadPool = Executors.newFixedThreadPool(maxPos);
         try {
             final LocalDateTime start = LocalDateTime.now();
-            for (Runnable task : tasks) {
-                threadPool.submit(task);
+            for (Thread thread : threads) {
+                thread.start();
             }
-            try {
-                latch.await();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+            // 线程池方案，Task8需要依赖指定Thread对象，不能用线程池
+//            for (Runnable task : tasks) {
+//                threadPool.submit(task);
+//            }
+            latch.await();
             final LocalDateTime end = LocalDateTime.now();
             return Duration.between(start, end).toMillis();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
         } finally {
-            threadPool.shutdown();
+//            threadPool.shutdown();
         }
     }
 
@@ -80,6 +90,8 @@ public class Main {
                 return SyncTask5.getTaskList(max, maxPos, latch);
             case "SyncTask6":
                 return SyncTask6.getTaskList(max, maxPos, latch);
+            case "SyncTask7":
+                return SyncTask7.getTaskList(max, maxPos, latch);
             default:
                 throw new IllegalArgumentException(taskType + "___taskType is not supported");
         }

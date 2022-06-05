@@ -26,7 +26,7 @@ public class SyncTask6 implements Runnable {
 
 
     /**
-     * 利用阻塞队列，在线程间传递信号，实现线程间的同步和有序执行
+     * 利用信号量，在线程间传递信号，实现线程间的同步和有序执行
      */
     @Override
     public void run() {
