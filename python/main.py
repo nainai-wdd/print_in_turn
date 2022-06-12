@@ -88,10 +88,10 @@ def run_by_sync(max):
 
 if __name__ == '__main__':
     max = 10000 # 打印数字数量
-    max_pos = 5 # 协程数量
+    max_pos = 20 # 协程数量
     sync_run_msg = run_by_sync(max)
-    async_run_msg = run_by_task1(max, max_pos)
-    gen_run_msg = run_by_task2(max, max_pos)
+    async_run_msg = run_by_task1(max_pos, max)
+    gen_run_msg = run_by_task2(max_pos, max)
     print(sync_run_msg)
     print(async_run_msg)
     print(gen_run_msg)
