@@ -16,9 +16,9 @@ public class Main {
 
     public static void main(String[] args) {
         String[] taskTypes = new String[]{
-//                "SyncTask1",
-//                "SyncTask2",
-//                "SyncTask3",
+                "SyncTask1",
+                "SyncTask2",
+                "SyncTask3",
                 "SyncTask4",
                 "SyncTask5",
                 "SyncTask6",
@@ -27,7 +27,7 @@ public class Main {
         // 打印总数
         int max = 10000;
         // 协作线程数量
-        int maxPos = 10;
+        int maxPos = 20;
         // 取平均值时的窗口大小
         int times = 3;
         // 单线程执行
@@ -38,7 +38,7 @@ public class Main {
                         Arrays.stream(taskTypes).collect(Collectors.toMap(taskType -> taskType,
                                 taskType -> test_async_once(taskType, max, maxPos)))
                 // 多次计算，获取总耗时
-        ).reduce(new HashMap<String, Long>(16), (map, next) -> {
+        ).reduce(new HashMap<>(16), (map, next) -> {
             next.forEach((k, v) -> map.put(k, map.getOrDefault(k, 0L) + v));
             return map;
         });
@@ -54,25 +54,17 @@ public class Main {
         System.out.println("=================start:" + taskType + "====================");
         final CountDownLatch latch = new CountDownLatch(maxPos);
         Runnable[] tasks = getTaskList(taskType, max, latch, maxPos);
-        Thread[] threads = null;
-        threads = Util.createThreadsByRunnables(tasks);
-//        final ExecutorService threadPool = Executors.newFixedThreadPool(maxPos);
+        Thread[] threads = Util.createThreadsByRunnables(tasks);
         try {
             final LocalDateTime start = LocalDateTime.now();
             for (Thread thread : threads) {
                 thread.start();
             }
-            // 线程池方案，Task8需要依赖指定Thread对象，不能用线程池
-//            for (Runnable task : tasks) {
-//                threadPool.submit(task);
-//            }
             latch.await();
             final LocalDateTime end = LocalDateTime.now();
             return Duration.between(start, end).toMillis();
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
-        } finally {
-//            threadPool.shutdown();
         }
     }
 
